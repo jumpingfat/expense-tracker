@@ -426,19 +426,33 @@ const AI = {
       body: JSON.stringify({
         contents:[{parts:[
           {inline_data:{mime_type:'image/jpeg',data:b64}},
-          {text:`你是收據分析專家。仔細分析收據圖片，以 JSON 回傳（僅 JSON，無多餘文字）：
-{"currency":"幣別(TWD/CNY/USD/EUR/JPY/KRW/GBP)","total":總金額數字,"date":"YYYY-MM-DD(從收據讀取日期，找不到填今天)","country":"國家或城市","items":[{"name":"品項原文名稱","qty":數量,"unit_price":單價,"subtotal":小計,"category":"分類"}]}
-category只能填：餐飲/購物/交通/住宿/娛樂/其他
-規則：currency根據符號判斷；total為總計；items列出所有品項；qty/unit_price不確定時填1和subtotal值。`}
+          {text:`You are a receipt OCR expert. Analyze this receipt image and return ONLY valid JSON with no markdown, no code blocks, no explanation.
+
+Example format:
+{"currency":"JPY","total":1580,"date":"2026-01-15","country":"Japan","items":[{"name":"Ramen","qty":1,"unit_price":980,"subtotal":980,"category":"餐飲"},{"name":"Beer","qty":2,"unit_price":300,"subtotal":600,"category":"餐飲"}]}
+
+Rules:
+- currency: detect from symbols → TWD(NT$/台幣), USD($), EUR(€), JPY(¥/円), KRW(₩/원), CNY(人民幣/元), GBP(£)
+- total: the final total as a plain number
+- date: read date from receipt as YYYY-MM-DD; if not found use ${U.today()}
+- country: country or city name
+- items: list EVERY line item on the receipt
+- qty: quantity (use 1 if unclear)
+- unit_price: price per unit (use subtotal value if only one unit)
+- subtotal: line total for that item
+- category: must be exactly one of these Chinese words: 餐飲 購物 交通 住宿 娛樂 其他
+
+Return ONLY the JSON object, nothing else.`}
         ]}],
-        generationConfig:{maxOutputTokens:1024,temperature:0}
+        generationConfig:{maxOutputTokens:2048,temperature:0}
       })
     });
     if(!r.ok){ const e=await r.json().catch(()=>({})); throw new Error(e.error?.message||'API 錯誤 '+r.status); }
     const d = await r.json();
     const txt = d.candidates[0].content.parts[0].text.trim();
+    console.log('[AI raw]', txt);
     const m = txt.match(/\{[\s\S]*\}/);
-    if(!m) throw new Error('無法解析回應');
+    if(!m) throw new Error('無法解析回應：'+txt.slice(0,200));
     const result = JSON.parse(m[0]);
     if(!result.items) result.items=[];
     if(!result.amount) result.amount = result.total||0;
