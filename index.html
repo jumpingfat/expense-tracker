@@ -189,7 +189,10 @@ select.inp{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns
           <input id="r-amt" type="number" class="inp" placeholder="0" step="0.01">
         </div>
       </div>
-      <div class="ig"><label class="il">品項描述</label><input id="r-items" type="text" class="inp" placeholder="咖啡、午餐..."></div>
+      <div class="ig">
+        <label class="il">品項明細 <span id="r-item-count" style="color:var(--muted);font-weight:400"></span></label>
+        <div id="r-items-table" style="border:1.5px solid var(--border);border-radius:10px;overflow:hidden;background:#fff"></div>
+      </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
         <div class="ig" style="margin:0"><label class="il">日期</label><input id="r-date" type="date" class="inp"></div>
         <div class="ig" style="margin:0"><label class="il">國家/城市</label><input id="r-country" type="text" class="inp" placeholder="台灣..."></div>
@@ -359,6 +362,11 @@ const U = {
     return s+n;
   },
   emoji(items) {
+    if(Array.isArray(items)) {
+      if(!items.length) return '🧾';
+      const cat = items[0].category;
+      return CAT_EMOJI[cat]||'📦';
+    }
     const t = (items||'').toLowerCase();
     if(/coffee|café|咖啡|카페/.test(t)) return '☕';
     if(/hotel|住宿|ホテル|호텔/.test(t)) return '🏨';
@@ -390,7 +398,26 @@ const U = {
   }
 };
 
+// ── FX Rates ───────────────────────────────────────────
+const FX = {
+  rates: {TWD:1,CNY:4.4,USD:32.5,EUR:35,JPY:0.22,KRW:0.024,GBP:41},
+  async fetch() {
+    try {
+      const r = await fetch('https://open.er-api.com/v6/latest/TWD');
+      if(!r.ok) return;
+      const d = await r.json();
+      Object.keys(FX.rates).forEach(k => {
+        if(d.rates[k] && k!=='TWD') FX.rates[k] = 1/d.rates[k];
+      });
+    } catch(e) {}
+  },
+  toTWD(amt, cur) { return Math.round(amt * (FX.rates[cur]||1)); },
+  sym(cur) { return {TWD:'NT$',CNY:'¥',USD:'$',EUR:'€',JPY:'¥',KRW:'₩',GBP:'£'}[cur]||cur; }
+};
+FX.fetch();
+
 // ── Gemini API ─────────────────────────────────────────
+const CAT_EMOJI = {餐飲:'🍽️',購物:'🛍️',交通:'🚇',住宿:'🏨',娛樂:'🎭',其他:'📦'};
 const AI = {
   async parse(b64) {
     const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${S.apiKey}`, {
@@ -399,11 +426,12 @@ const AI = {
       body: JSON.stringify({
         contents:[{parts:[
           {inline_data:{mime_type:'image/jpeg',data:b64}},
-          {text:`分析此收據/發票，以 JSON 回傳（僅 JSON，無其他文字）：
-{"currency":"幣別(TWD/CNY/USD/EUR/JPY/KRW/GBP)","amount":金額數字,"items":"品項(逗號分隔,原文,最多5項)","date":"YYYY-MM-DD","country":"國家或城市"}
-規則：currency根據符號或國家判斷；amount為總金額；看不到日期填今天。`}
+          {text:`你是收據分析專家。仔細分析收據圖片，以 JSON 回傳（僅 JSON，無多餘文字）：
+{"currency":"幣別(TWD/CNY/USD/EUR/JPY/KRW/GBP)","total":總金額數字,"date":"YYYY-MM-DD(從收據讀取日期，找不到填今天)","country":"國家或城市","items":[{"name":"品項原文名稱","qty":數量,"unit_price":單價,"subtotal":小計,"category":"分類"}]}
+category只能填：餐飲/購物/交通/住宿/娛樂/其他
+規則：currency根據符號判斷；total為總計；items列出所有品項；qty/unit_price不確定時填1和subtotal值。`}
         ]}],
-        generationConfig:{maxOutputTokens:512,temperature:0}
+        generationConfig:{maxOutputTokens:1024,temperature:0}
       })
     });
     if(!r.ok){ const e=await r.json().catch(()=>({})); throw new Error(e.error?.message||'API 錯誤 '+r.status); }
@@ -411,7 +439,10 @@ const AI = {
     const txt = d.candidates[0].content.parts[0].text.trim();
     const m = txt.match(/\{[\s\S]*\}/);
     if(!m) throw new Error('無法解析回應');
-    return JSON.parse(m[0]);
+    const result = JSON.parse(m[0]);
+    if(!result.items) result.items=[];
+    if(!result.amount) result.amount = result.total||0;
+    return result;
   }
 };
 
@@ -427,7 +458,8 @@ const GS = {
       body:JSON.stringify({action:'addEntries', entries: unsync.map(e=>({
         id:e.id, date:e.date, time:e.time||'', theme:e.theme,
         country:e.country||'', currency:e.currency, amount:e.amount,
-        items:e.items, notes:e.notes||'', createdAt:e.createdAt
+        items: Array.isArray(e.items) ? e.items.map(i=>`${i.name}×${i.qty||1}@${i.subtotal||i.unit_price||0}`).join('; ') : (e.items||''),
+        notes:e.notes||'', createdAt:e.createdAt
       }))})
     });
     const ids = new Set(unsync.map(e=>e.id));
@@ -481,7 +513,9 @@ const UI = {
       : '<div class="empty"><div class="empty-ico">📷</div><div class="empty-t">還沒有記錄</div><div class="empty-d">點下方相機按鈕</div></div>';
   },
   eiHtml(e) {
-    return `<div class="ei"><div class="eico">${U.emoji(e.items)}</div><div class="einf"><div class="etit">${e.items||'（未知品項）'}</div><div class="emeta">${e.theme} · ${U.fmtDate(e.date)}${e.country?' · '+e.country:''}</div></div><div class="eamt">${U.fmtAmt(e.amount,e.currency)}</div></div>`;
+    const ico = U.emoji(e.items);
+    const label = Array.isArray(e.items) ? e.items.map(i=>i.name).join('、')||'（未知品項）' : (e.items||'（未知品項）');
+    return `<div class="ei"><div class="eico">${ico}</div><div class="einf"><div class="etit">${label}</div><div class="emeta">${e.theme} · ${U.fmtDate(e.date)}${e.country?' · '+e.country:''}</div></div><div class="eamt">${U.fmtAmt(e.amount,e.currency)}</div></div>`;
   },
   renderHistory() {
     const f=document.getElementById('hist-filter');
@@ -562,6 +596,7 @@ const Cap = {
     document.getElementById('cap-loading').style.display='none';
     document.getElementById('cap-result').style.display='none';
     document.getElementById('cap-manual').style.display='block';
+    Cap._items=[];
   },
   openCamera() { document.getElementById('file-in').click(); },
   async onFile(ev) {
@@ -587,9 +622,42 @@ const Cap = {
   showResult(r) {
     document.getElementById('cap-loading').style.display='none';
     document.getElementById('cap-result').style.display='block';
-    document.getElementById('r-cur').value=r.currency||'TWD';
-    document.getElementById('r-amt').value=r.amount||'';
-    document.getElementById('r-items').value=r.items||'';
+    const cur = r.currency||'TWD';
+    document.getElementById('r-cur').value=cur;
+    document.getElementById('r-amt').value=r.total||r.amount||'';
+    // Render items table
+    const items = Array.isArray(r.items) ? r.items : [];
+    Cap._items = items;
+    document.getElementById('r-item-count').textContent = items.length ? `(${items.length} 項)` : '';
+    const tbl = document.getElementById('r-items-table');
+    if(!items.length) {
+      tbl.innerHTML = '<div style="padding:12px;color:var(--muted);font-size:13px;text-align:center">未辨識到品項</div>';
+    } else {
+      tbl.innerHTML = items.map((item,i) => {
+        const emoji = CAT_EMOJI[item.category]||'📦';
+        const sub = item.subtotal||item.unit_price||0;
+        const twd = FX.toTWD(sub, cur);
+        const showQty = item.qty && item.qty > 1;
+        return `<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;${i>0?'border-top:1px solid var(--border)':''}">
+          <span style="font-size:18px">${emoji}</span>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${item.name}</div>
+            ${showQty?`<div style="font-size:12px;color:var(--muted)">${item.qty} × ${FX.sym(cur)}${item.unit_price}</div>`:''}
+          </div>
+          <div style="text-align:right;flex-shrink:0">
+            <div style="font-size:14px;font-weight:700">${FX.sym(cur)}${sub}</div>
+            ${cur!=='TWD'?`<div style="font-size:11px;color:var(--muted)">≈ NT$${twd}</div>`:''}
+          </div>
+        </div>`;
+      }).join('') +
+      `<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:var(--pl);border-top:2px solid var(--border)">
+        <span style="font-size:14px;font-weight:700;color:var(--pd)">合計</span>
+        <div style="text-align:right">
+          <div style="font-size:16px;font-weight:800;color:var(--pd)">${FX.sym(cur)}${r.total||r.amount||0}</div>
+          ${cur!=='TWD'?`<div style="font-size:12px;color:var(--pd)">≈ NT$${FX.toTWD(r.total||r.amount||0, cur)}</div>`:''}
+        </div>
+      </div>`;
+    }
     document.getElementById('r-date').value=r.date||U.today();
     document.getElementById('r-country').value=r.country||'';
     document.getElementById('r-notes').value='';
@@ -605,12 +673,13 @@ const Cap = {
     const cur=document.getElementById('r-cur').value;
     const amt=parseFloat(document.getElementById('r-amt').value);
     if(!amt||isNaN(amt)){UI.toast('請輸入金額');return;}
+    const items = Cap._items||[];
     const entry={
       id:U.uid(), date:document.getElementById('r-date').value||U.today(),
       time:U.time(), theme:document.getElementById('r-theme').value,
       country:document.getElementById('r-country').value.trim(),
       currency:cur, amount:amt,
-      items:document.getElementById('r-items').value.trim()||'（未填寫）',
+      items:items,
       notes:document.getElementById('r-notes').value.trim(),
       createdAt:Date.now(), synced:false
     };
