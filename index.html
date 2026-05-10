@@ -167,7 +167,7 @@ select.inp{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns
 
     <!-- Result form -->
     <div id="cap-result" style="display:none">
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;padding:10px 12px;background:var(--pl);border-radius:10px">
+      <div class="result-banner" style="display:flex;align-items:center;gap:8px;margin-bottom:14px;padding:10px 12px;background:var(--pl);border-radius:10px">
         <span style="font-size:18px">✅</span>
         <span style="font-size:14px;font-weight:600;color:var(--pd)">辨識完成，確認後儲存</span>
       </div>
@@ -451,11 +451,18 @@ Return ONLY the JSON object, nothing else.`}
     const d = await r.json();
     const txt = d.candidates[0].content.parts[0].text.trim();
     console.log('[AI raw]', txt);
-    const m = txt.match(/\{[\s\S]*\}/);
-    if(!m) throw new Error('無法解析回應：'+txt.slice(0,200));
+    // Strip markdown code fences if Gemini wraps the JSON
+    const stripped = txt.replace(/^```(?:json)?\s*/i,'').replace(/\s*```\s*$/,'');
+    const m = stripped.match(/\{[\s\S]*\}/);
+    if(!m) throw new Error('無法解析：'+txt.slice(0,120));
     const result = JSON.parse(m[0]);
-    if(!result.items) result.items=[];
-    if(!result.amount) result.amount = result.total||0;
+    if(!Array.isArray(result.items)) result.items=[];
+    result.amount = result.total || result.amount || 0;
+    // If no items but we have a total, create one fallback item
+    if(result.items.length===0 && result.amount>0) {
+      const label = result.country ? result.country+'消費' : '消費';
+      result.items=[{name:label,qty:1,unit_price:result.amount,subtotal:result.amount,category:'其他'}];
+    }
     return result;
   }
 };
@@ -629,13 +636,21 @@ const Cap = {
       Cap.showResult(result);
     } catch(err) {
       document.getElementById('cap-loading').style.display='none';
-      UI.toast('⚠️ 辨識失敗：'+err.message);
-      Cap.showResult({date:U.today()});
+      Cap.showResult({date:U.today(), _error:err.message});
     }
   },
   showResult(r) {
     document.getElementById('cap-loading').style.display='none';
     document.getElementById('cap-result').style.display='block';
+    // Banner: error or success
+    const banner = document.querySelector('#cap-result .result-banner');
+    if(r._error) {
+      banner.style.background='#fee2e2';
+      banner.innerHTML='<span style="font-size:18px">⚠️</span><span style="font-size:13px;font-weight:600;color:#b91c1c">辨識失敗，請手動填寫。錯誤：'+r._error.slice(0,80)+'</span>';
+    } else {
+      banner.style.background='var(--pl)';
+      banner.innerHTML='<span style="font-size:18px">✅</span><span style="font-size:14px;font-weight:600;color:var(--pd)">辨識完成，確認後儲存</span>';
+    }
     const cur = r.currency||'TWD';
     document.getElementById('r-cur').value=cur;
     document.getElementById('r-amt').value=r.total||r.amount||'';
