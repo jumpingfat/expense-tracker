@@ -1,0 +1,734 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="智能記帳">
+<meta name="theme-color" content="#059669">
+<title>智能記帳 ExpenseAI</title>
+<style>
+:root{--p:#059669;--pl:#d1fae5;--pd:#047857;--bg:#f9fafb;--card:#fff;--txt:#111827;--muted:#6b7280;--border:#e5e7eb;--danger:#ef4444;--r:16px;--sh:0 1px 3px rgba(0,0,0,.1)}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--txt);min-height:100vh;max-width:480px;margin:0 auto;overflow-x:hidden}
+.screen{display:none;min-height:100vh;padding-bottom:80px}
+.screen.active{display:block}
+
+/* Header */
+.hd{background:#fff;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);position:sticky;top:0;z-index:100}
+.hd h1{font-size:18px;font-weight:700}
+.hdbtn{width:36px;height:36px;display:flex;align-items:center;justify-content:center;border-radius:50%;border:none;background:none;font-size:20px;cursor:pointer;color:var(--txt)}
+
+/* Bottom nav */
+.bnav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:480px;background:#fff;border-top:1px solid var(--border);display:flex;z-index:200;padding-bottom:env(safe-area-inset-bottom)}
+.ni{flex:1;display:flex;flex-direction:column;align-items:center;padding:8px 0 6px;cursor:pointer;border:none;background:none;color:var(--muted);font-size:10px;gap:3px;transition:color .15s}
+.ni.active{color:var(--p)}
+.ni svg{width:22px;height:22px}
+.ni-cam{background:var(--p);border-radius:50%;width:52px;height:52px;display:flex;align-items:center;justify-content:center;margin-top:-18px;box-shadow:0 4px 12px rgba(5,150,105,.4)}
+.ni-cam svg{width:26px;height:26px;color:#fff}
+
+/* Cards */
+.card{background:var(--card);border-radius:var(--r);padding:16px;box-shadow:var(--sh);margin-bottom:12px}
+
+/* Buttons */
+.btn{padding:12px 20px;border-radius:12px;border:none;font-size:15px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:8px;transition:opacity .15s}
+.btn:active{opacity:.8}
+.btn-p{background:var(--p);color:#fff}
+.btn-s{background:var(--pl);color:var(--pd)}
+.btn-d{background:#fee2e2;color:var(--danger)}
+.btn-f{width:100%;justify-content:center}
+
+/* Inputs */
+.ig{margin-bottom:14px}
+.il{font-size:12px;font-weight:600;color:var(--muted);margin-bottom:5px;display:block}
+.inp{width:100%;padding:11px 13px;border:1.5px solid var(--border);border-radius:10px;font-size:15px;outline:none;background:#fff;transition:border-color .2s}
+.inp:focus{border-color:var(--p)}
+select.inp{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 20 20' fill='%236b7280'%3E%3Cpath d='M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;padding-right:36px}
+
+/* Theme badge */
+.tbadge{display:inline-flex;align-items:center;gap:6px;background:var(--pl);color:var(--pd);padding:5px 12px;border-radius:20px;font-size:13px;font-weight:700;cursor:pointer}
+
+/* Entry item */
+.ei{display:flex;align-items:center;gap:12px;padding:13px 0;border-bottom:1px solid var(--border)}
+.ei:last-child{border-bottom:none}
+.eico{width:42px;height:42px;border-radius:11px;background:var(--pl);display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0}
+.einf{flex:1;min-width:0}
+.etit{font-size:15px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.emeta{font-size:12px;color:var(--muted);margin-top:2px}
+.eamt{font-size:16px;font-weight:700;color:var(--pd);white-space:nowrap}
+
+/* Theme option */
+.topt{display:flex;align-items:center;justify-content:space-between;padding:13px;border-radius:11px;margin-bottom:8px;cursor:pointer;border:2px solid transparent;transition:all .15s}
+.topt:hover{background:var(--bg)}
+.topt.sel{border-color:var(--p);background:var(--pl)}
+
+/* Overlay / sheet */
+.ovl{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:300;display:flex;align-items:flex-end;justify-content:center}
+.ovl.hidden{display:none}
+.sht{background:#fff;border-radius:20px 20px 0 0;width:100%;max-width:480px;padding:20px;max-height:85vh;overflow-y:auto}
+.hdl{width:40px;height:4px;background:var(--border);border-radius:2px;margin:0 auto 18px}
+
+/* Toast */
+.toast{position:fixed;bottom:88px;left:50%;transform:translateX(-50%);background:#1f2937;color:#fff;padding:10px 20px;border-radius:20px;font-size:14px;font-weight:500;z-index:400;transition:opacity .3s;white-space:nowrap;pointer-events:none}
+.toast.hidden{opacity:0}
+
+/* Misc */
+.sec{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin:18px 0 8px}
+.p16{padding:0 16px}
+.pt16{padding-top:16px}
+.empty{text-align:center;padding:40px 20px}
+.empty-ico{font-size:44px;margin-bottom:10px}
+.empty-t{font-size:17px;font-weight:700;margin-bottom:6px}
+.empty-d{color:var(--muted);font-size:13px}
+.stat{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border)}
+.stat:last-child{border-bottom:none}
+.spin{width:36px;height:36px;border:3px solid var(--pl);border-top-color:var(--p);border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.syncbtn{display:flex;align-items:center;gap:6px;padding:7px 14px;background:#fff;border:1.5px solid var(--border);border-radius:20px;font-size:13px;font-weight:600;cursor:pointer;color:var(--txt)}
+.syncbtn.go svg{animation:spin .9s linear infinite}
+</style>
+</head>
+<body>
+
+<!-- ─── SETUP ─── -->
+<div id="s-setup" class="screen active">
+  <div style="padding:52px 24px 32px;text-align:center">
+    <div style="font-size:64px;margin-bottom:14px">🧾</div>
+    <div style="font-size:26px;font-weight:800;margin-bottom:8px">智能記帳</div>
+    <div style="color:var(--muted);font-size:14px;line-height:1.7">拍照即記帳，AI 自動辨識幣別與品項<br>支援 TWD／CNY／USD／EUR／JPY／KRW／GBP</div>
+  </div>
+  <div class="p16">
+    <div class="ig">
+      <label class="il">Gemini API Key <span style="color:var(--danger)">*</span></label>
+      <input id="su-key" type="password" class="inp" placeholder="AIzaSy...">
+      <div style="font-size:12px;color:var(--muted);margin-top:4px">僅儲存在您的裝置，不會上傳</div>
+    </div>
+    <div class="ig">
+      <label class="il">Google Apps Script URL <span style="color:var(--muted)">(選填，用於同步試算表)</span></label>
+      <input id="su-gs" type="url" class="inp" placeholder="https://script.google.com/macros/s/..." value="https://script.google.com/macros/s/AKfycbxOu59k3Bygv114SaObCwkkHdkivDyq4D1DpMXTo64kkPDWFqkLnha9Yf5YDbKY8X-2/exec">
+    </div>
+    <button class="btn btn-p btn-f" onclick="App.setup()">開始使用 →</button>
+    <div style="margin-top:20px;padding:14px;background:var(--pl);border-radius:12px;font-size:13px;line-height:1.8;color:var(--pd)">
+      <strong>📋 取得免費 API Key：</strong><br>
+      前往 <strong>aistudio.google.com</strong> → Get API key → Create API key（免費，無需信用卡）
+    </div>
+  </div>
+</div>
+
+<!-- ─── HOME ─── -->
+<div id="s-home" class="screen">
+  <div class="hd">
+    <div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:3px">目前主題</div>
+      <div class="tbadge" onclick="UI.openThemePicker()">
+        <span id="cur-theme">日常</span>
+        <svg viewBox="0 0 20 20" fill="currentColor" width="13" height="13"><path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"/></svg>
+      </div>
+    </div>
+    <button id="sync-btn" class="syncbtn" onclick="App.sync()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+      同步
+    </button>
+  </div>
+  <div class="p16 pt16">
+    <div class="card">
+      <div style="font-size:12px;font-weight:700;color:var(--muted);margin-bottom:10px">本月支出</div>
+      <div id="home-summary"><div style="color:var(--muted);font-size:14px">尚無記錄</div></div>
+    </div>
+    <div class="sec">最近記錄</div>
+    <div class="card" id="home-entries">
+      <div class="empty"><div class="empty-ico">📷</div><div class="empty-t">還沒有記錄</div><div class="empty-d">點下方相機按鈕拍攝發票</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ─── CAPTURE ─── -->
+<div id="s-capture" class="screen">
+  <div class="hd">
+    <button class="hdbtn" onclick="Nav.go('home')">←</button>
+    <h1>新增記錄</h1>
+    <div style="width:36px"></div>
+  </div>
+  <div class="p16 pt16">
+    <!-- Image area -->
+    <div style="position:relative;margin-bottom:14px">
+      <div id="cap-placeholder" onclick="Cap.openCamera()" style="width:100%;height:200px;background:#f3f4f6;border-radius:var(--r);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;cursor:pointer;border:2px dashed var(--border)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="var(--muted)" stroke-width="1.5" width="48" height="48"><path d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><circle cx="12" cy="13" r="3"/></svg>
+        <span style="font-size:14px;color:var(--muted)">點擊拍照或選擇圖片</span>
+      </div>
+      <img id="cap-preview" style="display:none;width:100%;max-height:260px;object-fit:contain;border-radius:var(--r);background:#f3f4f6" src="" alt="">
+      <div id="cap-loading" style="display:none;position:absolute;inset:0;background:rgba(255,255,255,.9);border-radius:var(--r);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px">
+        <div class="spin"></div>
+        <div style="font-size:15px;font-weight:600">AI 辨識中...</div>
+        <div style="font-size:13px;color:var(--muted)">分析幣別、品項與金額</div>
+      </div>
+    </div>
+
+    <!-- Result form -->
+    <div id="cap-result" style="display:none">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;padding:10px 12px;background:var(--pl);border-radius:10px">
+        <span style="font-size:18px">✅</span>
+        <span style="font-size:14px;font-weight:600;color:var(--pd)">辨識完成，確認後儲存</span>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
+        <div class="ig" style="margin:0">
+          <label class="il">幣別</label>
+          <select id="r-cur" class="inp">
+            <option value="TWD">TWD 新台幣</option>
+            <option value="CNY">CNY 人民幣</option>
+            <option value="USD">USD 美元</option>
+            <option value="EUR">EUR 歐元</option>
+            <option value="JPY">JPY 日元</option>
+            <option value="KRW">KRW 韓元</option>
+            <option value="GBP">GBP 英鎊</option>
+          </select>
+        </div>
+        <div class="ig" style="margin:0">
+          <label class="il">金額</label>
+          <input id="r-amt" type="number" class="inp" placeholder="0" step="0.01">
+        </div>
+      </div>
+      <div class="ig"><label class="il">品項描述</label><input id="r-items" type="text" class="inp" placeholder="咖啡、午餐..."></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div class="ig" style="margin:0"><label class="il">日期</label><input id="r-date" type="date" class="inp"></div>
+        <div class="ig" style="margin:0"><label class="il">國家/城市</label><input id="r-country" type="text" class="inp" placeholder="台灣..."></div>
+      </div>
+      <div class="ig"><label class="il">主題</label><select id="r-theme" class="inp"></select></div>
+      <div class="ig"><label class="il">備註（選填）</label><input id="r-notes" type="text" class="inp" placeholder="補充說明..."></div>
+      <div style="display:flex;gap:10px">
+        <button class="btn btn-s" onclick="Cap.retake()" style="flex:1">重拍</button>
+        <button class="btn btn-p" onclick="Cap.save()" style="flex:2">💾 儲存</button>
+      </div>
+    </div>
+
+    <div id="cap-manual" style="margin-top:10px">
+      <button class="btn btn-s btn-f" onclick="Cap.manualEntry()">✏️ 手動輸入（不拍照）</button>
+    </div>
+  </div>
+</div>
+
+<!-- ─── HISTORY ─── -->
+<div id="s-history" class="screen">
+  <div class="hd">
+    <h1>記帳記錄</h1>
+    <select id="hist-filter" class="inp" style="width:auto;padding:6px 30px 6px 10px;font-size:13px" onchange="UI.renderHistory()">
+      <option value="all">全部主題</option>
+    </select>
+  </div>
+  <div class="p16 pt16" id="hist-list"></div>
+</div>
+
+<!-- ─── THEMES ─── -->
+<div id="s-themes" class="screen">
+  <div class="hd">
+    <h1>記帳主題</h1>
+    <button class="hdbtn" onclick="Themes.openAdd()" title="新增">＋</button>
+  </div>
+  <div class="p16 pt16">
+    <div class="card" style="margin-bottom:12px;padding:12px 14px;background:var(--pl)">
+      <div style="font-size:13px;color:var(--pd);line-height:1.7">
+        💡 選擇主題後，所有拍照記錄都歸類在此主題下，直到你切換。
+      </div>
+    </div>
+    <div class="card" id="themes-list"></div>
+  </div>
+</div>
+
+<!-- ─── SETTINGS ─── -->
+<div id="s-settings" class="screen">
+  <div class="hd"><h1>設定</h1></div>
+  <div class="p16 pt16">
+    <div class="sec">API 設定</div>
+    <div class="card">
+      <div class="ig"><label class="il">Gemini API Key</label><input id="cfg-key" type="password" class="inp"></div>
+      <div class="ig" style="margin-bottom:0"><label class="il">Google Apps Script URL</label><input id="cfg-gs" type="url" class="inp" placeholder="（選填）"></div>
+    </div>
+
+    <div class="sec">Google Sheets 同步設定</div>
+    <div class="card">
+      <div style="font-size:13px;line-height:1.9;color:var(--muted)">
+        <strong style="color:var(--txt)">一次性設定步驟：</strong><br>
+        1. 用下方程式碼建立一個 Google 試算表<br>
+        2. 開啟試算表 → 擴充功能 → Apps Script<br>
+        3. 貼上下方程式碼，儲存<br>
+        4. 部署 → 新增部署項目 → 類型：網頁應用程式<br>
+        5. 執行身分：我，存取權：<strong>所有人</strong><br>
+        6. 複製 URL 填入上方欄位
+      </div>
+    </div>
+
+    <div class="sec">Apps Script 程式碼</div>
+    <div class="card">
+      <textarea id="gs-code" readonly style="width:100%;height:220px;font-size:11px;font-family:monospace;border:1px solid var(--border);border-radius:8px;padding:10px;resize:none;background:#f9fafb;color:#374151"></textarea>
+      <button class="btn btn-s btn-f" style="margin-top:8px" onclick="App.copyScript()">📋 複製程式碼</button>
+    </div>
+
+    <div class="sec">資料管理</div>
+    <div class="card">
+      <button class="btn btn-s btn-f" onclick="App.exportJSON()" style="margin-bottom:10px">📤 匯出 JSON 備份</button>
+      <button class="btn btn-d btn-f" onclick="App.clearAll()">🗑 清除所有記錄</button>
+    </div>
+
+    <button class="btn btn-p btn-f" onclick="App.saveSettings()" style="margin:4px 0 20px">儲存設定</button>
+  </div>
+</div>
+
+<!-- ─── BOTTOM NAV ─── -->
+<nav class="bnav" id="bnav">
+  <button class="ni active" id="n-home" onclick="Nav.go('home')">
+    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z"/></svg>
+    首頁
+  </button>
+  <button class="ni" id="n-history" onclick="Nav.go('history')">
+    <svg viewBox="0 0 24 24" fill="currentColor"><path fill-rule="evenodd" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" clip-rule="evenodd"/></svg>
+    記錄
+  </button>
+  <button class="ni" id="n-capture" onclick="Nav.go('capture')" style="padding:0 16px 6px">
+    <div class="ni-cam">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><circle cx="12" cy="13" r="3"/></svg>
+    </div>
+  </button>
+  <button class="ni" id="n-themes" onclick="Nav.go('themes')">
+    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 3a1 1 0 000 2h6a1 1 0 100-2H7zM4 7a1 1 0 011-1h10a1 1 0 110 2H5a1 1 0 01-1-1zM2 11a2 2 0 012-2h16a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2v-6z"/></svg>
+    主題
+  </button>
+  <button class="ni" id="n-settings" onclick="Nav.go('settings')">
+    <svg viewBox="0 0 24 24" fill="currentColor"><path fill-rule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clip-rule="evenodd"/></svg>
+    設定
+  </button>
+</nav>
+
+<!-- Theme Picker Sheet -->
+<div id="ovl-theme" class="ovl hidden" onclick="UI.closeThemePicker()">
+  <div class="sht" onclick="event.stopPropagation()">
+    <div class="hdl"></div>
+    <h3 style="margin-bottom:14px;font-size:17px;font-weight:700">選擇記帳主題</h3>
+    <div id="tp-list"></div>
+    <button class="btn btn-s btn-f" style="margin-top:10px" onclick="Themes.openAdd()">＋ 新增主題</button>
+  </div>
+</div>
+
+<!-- Add Theme Sheet -->
+<div id="ovl-add" class="ovl hidden" onclick="UI.closeAddTheme()">
+  <div class="sht" onclick="event.stopPropagation()">
+    <div class="hdl"></div>
+    <h3 style="margin-bottom:14px;font-size:17px;font-weight:700">新增記帳主題</h3>
+    <div class="ig">
+      <label class="il">主題名稱</label>
+      <input id="new-theme" type="text" class="inp" placeholder="例：出差、旅遊、日常、家庭" onkeydown="if(event.key==='Enter')Themes.add()">
+    </div>
+    <div style="display:flex;gap:10px">
+      <button class="btn btn-s" onclick="UI.closeAddTheme()" style="flex:1">取消</button>
+      <button class="btn btn-p" onclick="Themes.add()" style="flex:2">新增</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast" class="toast hidden"></div>
+<input type="file" id="file-in" accept="image/*" capture="environment" style="display:none" onchange="Cap.onFile(event)">
+
+<script>
+// ── State ──────────────────────────────────────────────
+const S = {
+  apiKey: '', gsUrl: '',
+  currentTheme: '日常',
+  themes: ['日常', '出差', '旅遊'],
+  entries: []
+};
+
+// ── Storage ────────────────────────────────────────────
+const Store = {
+  save() { localStorage.setItem('xai', JSON.stringify(S)); },
+  load() {
+    try { const d = JSON.parse(localStorage.getItem('xai')||'{}'); Object.assign(S, d); } catch{}
+  },
+  ready() { return !!S.apiKey; }
+};
+
+// ── Utils ──────────────────────────────────────────────
+const U = {
+  uid() { return Date.now().toString(36)+Math.random().toString(36).slice(2); },
+  today() { return new Date().toISOString().slice(0,10); },
+  time() { return new Date().toTimeString().slice(0,5); },
+  fmtDate(d) { return (d||'').replace(/-/g,'/'); },
+  sym(c) { return {TWD:'NT$',CNY:'¥',USD:'$',EUR:'€',JPY:'¥',KRW:'₩',GBP:'£'}[c]||c; },
+  fmtAmt(a, c) {
+    const s = U.sym(c);
+    const n = (c==='KRW'||c==='JPY') ? Math.round(a).toLocaleString() : parseFloat(a).toFixed(2);
+    return s+n;
+  },
+  emoji(items) {
+    const t = (items||'').toLowerCase();
+    if(/coffee|café|咖啡|카페/.test(t)) return '☕';
+    if(/hotel|住宿|ホテル|호텔/.test(t)) return '🏨';
+    if(/taxi|uber|train|flight|機票|列車|지하철|電車|捷運/.test(t)) return '🚇';
+    if(/shop|購物|買|쇼핑|ショッピング|超市|超商/.test(t)) return '🛍️';
+    if(/food|lunch|dinner|breakfast|eat|餐|飯|麵|pizza|sushi|寿司|점심/.test(t)) return '🍽️';
+    if(/book|書|本/.test(t)) return '📚';
+    if(/drug|pharmacy|藥|薬/.test(t)) return '💊';
+    return '🧾';
+  },
+  async toB64(file) {
+    return new Promise(res => {
+      const r = new FileReader();
+      r.onload = e => {
+        const img = new Image();
+        img.onload = () => {
+          const c = document.createElement('canvas');
+          const max = 1200;
+          let w = img.width, h = img.height;
+          if(w>max||h>max){ if(w>h){h=h*max/w;w=max;}else{w=w*max/h;h=max;} }
+          c.width=Math.round(w); c.height=Math.round(h);
+          c.getContext('2d').drawImage(img,0,0,c.width,c.height);
+          res(c.toDataURL('image/jpeg',.85).split(',')[1]);
+        };
+        img.src = e.target.result;
+      };
+      r.readAsDataURL(file);
+    });
+  }
+};
+
+// ── Gemini API ─────────────────────────────────────────
+const AI = {
+  async parse(b64) {
+    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${S.apiKey}`, {
+      method:'POST',
+      headers:{'content-type':'application/json'},
+      body: JSON.stringify({
+        contents:[{parts:[
+          {inline_data:{mime_type:'image/jpeg',data:b64}},
+          {text:`分析此收據/發票，以 JSON 回傳（僅 JSON，無其他文字）：
+{"currency":"幣別(TWD/CNY/USD/EUR/JPY/KRW/GBP)","amount":金額數字,"items":"品項(逗號分隔,原文,最多5項)","date":"YYYY-MM-DD","country":"國家或城市"}
+規則：currency根據符號或國家判斷；amount為總金額；看不到日期填今天。`}
+        ]}],
+        generationConfig:{maxOutputTokens:512,temperature:0}
+      })
+    });
+    if(!r.ok){ const e=await r.json().catch(()=>({})); throw new Error(e.error?.message||'API 錯誤 '+r.status); }
+    const d = await r.json();
+    const txt = d.candidates[0].content.parts[0].text.trim();
+    const m = txt.match(/\{[\s\S]*\}/);
+    if(!m) throw new Error('無法解析回應');
+    return JSON.parse(m[0]);
+  }
+};
+
+// ── Sheets Sync ────────────────────────────────────────
+const GS = {
+  async push(entries) {
+    if(!S.gsUrl) return {skip:true};
+    const unsync = entries.filter(e=>!e.synced);
+    if(!unsync.length) return {n:0};
+    await fetch(S.gsUrl,{
+      method:'POST', mode:'no-cors',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({action:'addEntries', entries: unsync.map(e=>({
+        id:e.id, date:e.date, time:e.time||'', theme:e.theme,
+        country:e.country||'', currency:e.currency, amount:e.amount,
+        items:e.items, notes:e.notes||'', createdAt:e.createdAt
+      }))})
+    });
+    const ids = new Set(unsync.map(e=>e.id));
+    S.entries.forEach(e=>{ if(ids.has(e.id)) e.synced=true; });
+    Store.save();
+    return {n:unsync.length};
+  }
+};
+
+// ── Nav ────────────────────────────────────────────────
+const Nav = {
+  go(name) {
+    document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+    document.getElementById('s-'+name).classList.add('active');
+    document.querySelectorAll('.ni').forEach(n=>n.classList.remove('active'));
+    const nb = document.getElementById('n-'+name);
+    if(nb) nb.classList.add('active');
+    if(name==='home') UI.renderHome();
+    if(name==='history') UI.renderHistory();
+    if(name==='themes') UI.renderThemes();
+    if(name==='capture') Cap.init();
+    if(name==='settings') UI.renderSettings();
+  }
+};
+
+// ── UI ─────────────────────────────────────────────────
+const UI = {
+  toast(msg, ms=2500) {
+    const el=document.getElementById('toast');
+    el.textContent=msg; el.classList.remove('hidden');
+    clearTimeout(UI._t);
+    UI._t=setTimeout(()=>el.classList.add('hidden'),ms);
+  },
+  renderHome() {
+    document.getElementById('cur-theme').textContent = S.currentTheme;
+    const month = U.today().slice(0,7);
+    const me = S.entries.filter(e=>(e.date||'').startsWith(month));
+    const sum = document.getElementById('home-summary');
+    if(!me.length){ sum.innerHTML='<div style="color:var(--muted);font-size:14px">本月尚無記錄</div>'; }
+    else {
+      const bc={};
+      me.forEach(e=>bc[e.currency]=(bc[e.currency]||0)+parseFloat(e.amount||0));
+      sum.innerHTML = Object.entries(bc).map(([c,t])=>
+        `<div class="stat"><span style="font-weight:600">${c}</span><span style="font-weight:700;font-size:17px">${U.fmtAmt(t,c)}</span></div>`
+      ).join('');
+    }
+    const recent = [...S.entries].sort((a,b)=>(b.createdAt||0)-(a.createdAt||0)).slice(0,6);
+    const cont = document.getElementById('home-entries');
+    cont.innerHTML = recent.length
+      ? recent.map(UI.eiHtml).join('')
+      : '<div class="empty"><div class="empty-ico">📷</div><div class="empty-t">還沒有記錄</div><div class="empty-d">點下方相機按鈕</div></div>';
+  },
+  eiHtml(e) {
+    return `<div class="ei"><div class="eico">${U.emoji(e.items)}</div><div class="einf"><div class="etit">${e.items||'（未知品項）'}</div><div class="emeta">${e.theme} · ${U.fmtDate(e.date)}${e.country?' · '+e.country:''}</div></div><div class="eamt">${U.fmtAmt(e.amount,e.currency)}</div></div>`;
+  },
+  renderHistory() {
+    const f=document.getElementById('hist-filter');
+    const sel=f.value;
+    f.innerHTML='<option value="all">全部主題</option>'+S.themes.map(t=>`<option value="${t}"${t===sel?' selected':''}>${t}</option>`).join('');
+    const list=document.getElementById('hist-list');
+    const entries=[...S.entries].filter(e=>sel==='all'||e.theme===sel).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+    if(!entries.length){ list.innerHTML='<div class="empty"><div class="empty-ico">🔍</div><div class="empty-t">沒有記錄</div></div>'; return; }
+    const g={};
+    entries.forEach(e=>{const d=e.date||'未知日期';(g[d]=g[d]||[]).push(e);});
+    list.innerHTML=Object.entries(g).sort(([a],[b])=>b.localeCompare(a)).map(([date,items])=>
+      `<div class="sec">${U.fmtDate(date)}</div><div class="card">${items.map(UI.eiHtml).join('')}</div>`
+    ).join('');
+  },
+  renderThemes() {
+    document.getElementById('themes-list').innerHTML = S.themes.map(t=>`
+      <div class="topt${t===S.currentTheme?' sel':''}" onclick="Themes.select('${t.replace(/'/g,"\\'")}')">
+        <div><div style="font-size:16px;font-weight:600">${t}</div><div style="font-size:12px;color:var(--muted)">${S.entries.filter(e=>e.theme===t).length} 筆記錄</div></div>
+        <div style="display:flex;align-items:center;gap:8px">
+          ${t===S.currentTheme?'<span style="color:var(--p);font-size:12px;font-weight:700">使用中</span>':''}
+          ${S.themes.length>1?`<button style="background:none;border:none;color:var(--danger);cursor:pointer;font-size:16px;padding:4px" onclick="event.stopPropagation();Themes.del('${t.replace(/'/g,"\\'")}')">🗑</button>`:''}
+        </div>
+      </div>`
+    ).join('');
+  },
+  renderSettings() {
+    document.getElementById('cfg-key').value=S.apiKey||'';
+    document.getElementById('cfg-gs').value=S.gsUrl||'';
+    document.getElementById('gs-code').value=GS_CODE;
+  },
+  openThemePicker() {
+    document.getElementById('tp-list').innerHTML = S.themes.map(t=>`
+      <div class="topt${t===S.currentTheme?' sel':''}" onclick="Themes.select('${t.replace(/'/g,"\\'")}');UI.closeThemePicker()">
+        <span style="font-size:15px;font-weight:600">${t}</span>
+        ${t===S.currentTheme?'<span style="color:var(--p)">✓</span>':''}
+      </div>`
+    ).join('');
+    document.getElementById('ovl-theme').classList.remove('hidden');
+  },
+  closeThemePicker() { document.getElementById('ovl-theme').classList.add('hidden'); },
+  closeAddTheme() { document.getElementById('ovl-add').classList.add('hidden'); document.getElementById('new-theme').value=''; }
+};
+
+// ── Themes ─────────────────────────────────────────────
+const Themes = {
+  select(name) {
+    S.currentTheme=name; Store.save();
+    document.getElementById('cur-theme').textContent=name;
+    UI.renderHome(); UI.renderThemes();
+    UI.toast(`✅ 已切換到「${name}」`);
+  },
+  openAdd() {
+    UI.closeThemePicker();
+    document.getElementById('ovl-add').classList.remove('hidden');
+    setTimeout(()=>document.getElementById('new-theme').focus(),100);
+  },
+  add() {
+    const name=document.getElementById('new-theme').value.trim();
+    if(!name){UI.toast('請輸入名稱');return;}
+    if(S.themes.includes(name)){UI.toast('名稱已存在');return;}
+    S.themes.push(name); S.currentTheme=name; Store.save();
+    UI.closeAddTheme(); UI.renderThemes(); UI.renderHome();
+    UI.toast(`✅ 已新增「${name}」並切換`);
+  },
+  del(name) {
+    if(!confirm(`刪除主題「${name}」？（記錄不會刪除）`)) return;
+    S.themes=S.themes.filter(t=>t!==name);
+    if(S.currentTheme===name) S.currentTheme=S.themes[0]||'日常';
+    Store.save(); UI.renderThemes(); UI.renderHome();
+  }
+};
+
+// ── Capture ────────────────────────────────────────────
+const Cap = {
+  init() {
+    document.getElementById('cap-placeholder').style.display='flex';
+    document.getElementById('cap-preview').style.display='none';
+    document.getElementById('cap-loading').style.display='none';
+    document.getElementById('cap-result').style.display='none';
+    document.getElementById('cap-manual').style.display='block';
+  },
+  openCamera() { document.getElementById('file-in').click(); },
+  async onFile(ev) {
+    const file=ev.target.files[0]; if(!file) return;
+    ev.target.value='';
+    const url=URL.createObjectURL(file);
+    document.getElementById('cap-preview').src=url;
+    document.getElementById('cap-preview').style.display='block';
+    document.getElementById('cap-placeholder').style.display='none';
+    document.getElementById('cap-manual').style.display='none';
+    document.getElementById('cap-loading').style.display='flex';
+    try {
+      const b64=await U.toB64(file);
+      Cap._b64=b64;
+      const result=await AI.parse(b64);
+      Cap.showResult(result);
+    } catch(err) {
+      document.getElementById('cap-loading').style.display='none';
+      UI.toast('⚠️ 辨識失敗：'+err.message);
+      Cap.showResult({date:U.today()});
+    }
+  },
+  showResult(r) {
+    document.getElementById('cap-loading').style.display='none';
+    document.getElementById('cap-result').style.display='block';
+    document.getElementById('r-cur').value=r.currency||'TWD';
+    document.getElementById('r-amt').value=r.amount||'';
+    document.getElementById('r-items').value=r.items||'';
+    document.getElementById('r-date').value=r.date||U.today();
+    document.getElementById('r-country').value=r.country||'';
+    document.getElementById('r-notes').value='';
+    const ts=document.getElementById('r-theme');
+    ts.innerHTML=S.themes.map(t=>`<option value="${t}"${t===S.currentTheme?' selected':''}>${t}</option>`).join('');
+  },
+  manualEntry() {
+    document.getElementById('cap-manual').style.display='none';
+    Cap.showResult({date:U.today()});
+  },
+  retake() { Cap.init(); },
+  save() {
+    const cur=document.getElementById('r-cur').value;
+    const amt=parseFloat(document.getElementById('r-amt').value);
+    if(!amt||isNaN(amt)){UI.toast('請輸入金額');return;}
+    const entry={
+      id:U.uid(), date:document.getElementById('r-date').value||U.today(),
+      time:U.time(), theme:document.getElementById('r-theme').value,
+      country:document.getElementById('r-country').value.trim(),
+      currency:cur, amount:amt,
+      items:document.getElementById('r-items').value.trim()||'（未填寫）',
+      notes:document.getElementById('r-notes').value.trim(),
+      createdAt:Date.now(), synced:false
+    };
+    S.entries.push(entry); Store.save();
+    if(S.gsUrl) GS.push(S.entries).catch(()=>{});
+    UI.toast(`✅ 已儲存 ${U.fmtAmt(amt,cur)}`);
+    Nav.go('home');
+  }
+};
+
+// ── App ────────────────────────────────────────────────
+const App = {
+  setup() {
+    const key=document.getElementById('su-key').value.trim();
+    const gs=document.getElementById('su-gs').value.trim();
+    if(!key){UI.toast('請輸入 API Key');return;}
+    S.apiKey=key; S.gsUrl=gs; Store.save();
+    document.getElementById('bnav').style.display='flex';
+    document.getElementById('s-setup').classList.remove('active');
+    Nav.go('home');
+  },
+  async sync() {
+    const btn=document.getElementById('sync-btn');
+    if(!S.gsUrl){UI.toast('請先設定 Apps Script URL');return;}
+    btn.classList.add('go');
+    try {
+      const r=await GS.push(S.entries);
+      if(r.skip) UI.toast('未設定 Apps Script URL');
+      else if(r.n===0) UI.toast('✅ 已是最新');
+      else UI.toast(`✅ 同步 ${r.n} 筆完成`);
+    } catch(e){ UI.toast('⚠️ 同步失敗：'+e.message); }
+    finally{ btn.classList.remove('go'); }
+  },
+  saveSettings() {
+    S.apiKey=document.getElementById('cfg-key').value.trim();
+    S.gsUrl=document.getElementById('cfg-gs').value.trim();
+    Store.save(); UI.toast('✅ 設定已儲存');
+  },
+  exportJSON() {
+    const blob=new Blob([JSON.stringify(S.entries,null,2)],{type:'application/json'});
+    const a=Object.assign(document.createElement('a'),{href:URL.createObjectURL(blob),download:`expenses-${U.today()}.json`});
+    a.click(); URL.revokeObjectURL(a.href);
+  },
+  clearAll() {
+    if(!confirm('清除所有記錄？無法復原。')) return;
+    S.entries=[]; Store.save(); UI.renderHome(); UI.toast('已清除');
+  },
+  copyScript() {
+    navigator.clipboard.writeText(GS_CODE).then(()=>UI.toast('✅ 程式碼已複製')).catch(()=>{
+      document.getElementById('gs-code').select(); document.execCommand('copy'); UI.toast('✅ 已複製');
+    });
+  }
+};
+
+// ── Apps Script Code ────────────────────────────────────
+const GS_CODE = `// 智能記帳 ExpenseAI - Google Apps Script
+// 使用方式：貼入 Apps Script → 部署為網頁應用程式 → 存取權「所有人」
+
+function doPost(e) {
+  try {
+    const data = JSON.parse(e.postData.contents);
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+
+    if (data.action === 'addEntries') {
+      let sh = ss.getSheetByName('Expenses') || ss.insertSheet('Expenses');
+      if (sh.getLastRow() === 0) {
+        sh.appendRow(['ID','日期','時間','主題','國家/城市','幣別','金額','品項','備註','建立時間']);
+        sh.getRange(1,1,1,10).setFontWeight('bold').setBackground('#d1fae5');
+        sh.setFrozenRows(1);
+      }
+      data.entries.forEach(r => sh.appendRow([
+        r.id, r.date, r.time, r.theme, r.country,
+        r.currency, r.amount, r.items, r.notes,
+        new Date(r.createdAt).toLocaleString('zh-TW')
+      ]));
+    }
+
+    if (data.action === 'addTheme') {
+      let sh = ss.getSheetByName('Themes') || ss.insertSheet('Themes');
+      if (sh.getLastRow() === 0) sh.appendRow(['主題','建立時間']);
+      sh.appendRow([data.theme, new Date().toLocaleString('zh-TW')]);
+    }
+
+    return ContentService
+      .createTextOutput(JSON.stringify({ ok: true }))
+      .setMimeType(ContentService.MimeType.JSON);
+  } catch(err) {
+    return ContentService
+      .createTextOutput(JSON.stringify({ ok: false, err: err.toString() }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+function doGet() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sh = ss.getSheetByName('Expenses');
+  if (!sh || sh.getLastRow() < 2)
+    return ContentService.createTextOutput('[]').setMimeType(ContentService.MimeType.JSON);
+  const rows = sh.getDataRange().getValues();
+  const hdrs = rows[0];
+  const data = rows.slice(1).map(r => Object.fromEntries(hdrs.map((h,i)=>[h,r[i]])));
+  return ContentService
+    .createTextOutput(JSON.stringify(data))
+    .setMimeType(ContentService.MimeType.JSON);
+}`;
+
+// ── Init ───────────────────────────────────────────────
+// Pre-fill Apps Script URL if not yet set
+const DEFAULT_GS_URL = 'https://script.google.com/macros/s/AKfycbxOu59k3Bygv114SaObCwkkHdkivDyq4D1DpMXTo64kkPDWFqkLnha9Yf5YDbKY8X-2/exec';
+Store.load();
+if(!S.gsUrl) { S.gsUrl = DEFAULT_GS_URL; Store.save(); }
+if(!Store.ready()){
+  document.getElementById('bnav').style.display='none';
+} else {
+  document.getElementById('s-setup').classList.remove('active');
+  document.getElementById('bnav').style.display='flex';
+  Nav.go('home');
+}
+</script>
+</body>
+</html>
